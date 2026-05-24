@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+_HERE = os.path.dirname(os.path.abspath(__file__))
+_ROOT = os.path.dirname(_HERE)
+
 
 class Config:
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
@@ -21,3 +24,16 @@ class Config:
     MQTT_BROKER_PORT = int(os.environ.get("MQTT_BROKER_PORT", 8883))
 
     RATELIMIT_STORAGE_URL = os.environ.get("REDIS_URL", "memory://")
+
+    # Azure OpenAI (GPT-4.1)
+    AZURE_ENDPOINT = os.environ.get("AZURE_ENDPOINT", "https://models.github.ai/inference")
+    AZURE_MODEL = os.environ.get("AZURE_MODEL", "openai/gpt-4.1")
+    AZURE_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+
+    # Whisper (STT)
+    WHISPER_BIN = os.environ.get(
+        "WHISPER_BIN", os.path.join(_ROOT, "build", "bin", "whisper-cli")
+    )
+    WHISPER_MODEL = os.environ.get(
+        "WHISPER_MODEL", os.path.join(_ROOT, "models", "ggml-tiny.bin")
+    )

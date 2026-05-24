@@ -9,3 +9,5 @@ python-dotenv==1.0.1
 psycopg2-binary==2.9.9
 cryptography==42.0.8
 eventlet==0.36.1
+azure-ai-inference>=1.0.0b9
+edge-tts>=7.2.8

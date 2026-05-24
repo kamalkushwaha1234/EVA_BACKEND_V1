@@ -12,7 +12,9 @@ def create_app(config_class=Config):
     socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
     limiter.init_app(app)
 
-    from app.api.v1 import auth, devices, conversations, subscriptions, device_api, ota
+    from app.api.v1 import (  # noqa: E402
+        auth, devices, conversations, subscriptions, device_api, ota, ai
+    )
 
     app.register_blueprint(auth.bp, url_prefix="/v1/auth")
     app.register_blueprint(devices.bp, url_prefix="/v1/devices")
@@ -20,8 +22,9 @@ def create_app(config_class=Config):
     app.register_blueprint(subscriptions.bp, url_prefix="/v1/subscriptions")
     app.register_blueprint(device_api.bp, url_prefix="/v1/device")
     app.register_blueprint(ota.bp, url_prefix="/v1/ota")
+    app.register_blueprint(ai.bp, url_prefix="/v1/ai")
 
-    from app.websocket import handlers  # noqa: F401 — registers SocketIO event handlers
+    from app.websocket import handlers  # noqa: F401
 
     with app.app_context():
         db.create_all()
