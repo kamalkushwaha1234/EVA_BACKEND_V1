@@ -47,7 +47,6 @@ def claim_device():
     idem_key = request.headers.get("Idempotency-Key", "").strip()
     if idem_key and idem_key in _idempotency_cache:
         return jsonify(_idempotency_cache[idem_key]), 201
-
     data = request.get_json(silent=True) or {}
     serial = data.get("serial", "").strip()
     claim_code = data.get("claim_code", "").strip()

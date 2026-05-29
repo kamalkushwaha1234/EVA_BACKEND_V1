@@ -8,6 +8,7 @@ When a Flask app is provided, the STT/ASK/TTS logic is called directly
 (no HTTP, no auth tokens needed). Otherwise it falls back to HTTP calls.
 """
 
+import logging
 import json
 import os
 import socket
@@ -19,6 +20,7 @@ import requests
 from dotenv import load_dotenv
 
 load_dotenv()
+logger = logging.getLogger(__name__)
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
 MQTT_BROKER = os.environ.get("MQTT_BROKER_HOST", "mff41cf7.ala.asia-southeast1.emqxsl.com")
@@ -63,7 +65,7 @@ def _http_login() -> str:
     )
     res.raise_for_status()
     token = res.json()["access_token"]
-    print(f"[Auth] Logged in as {API_EMAIL}")
+    logger.info("[Auth] Logged in as %s", API_EMAIL)
     return token
 
 
@@ -91,12 +93,12 @@ def _pipeline_http(wav_path: str) -> str | None:
         stt_res = _post_stt()
 
     if stt_res.status_code != 200:
-        print(f"[STT] Failed ({stt_res.status_code}): {stt_res.text}")
+        logger.error("[STT] Failed (%s): %s", stt_res.status_code, stt_res.text)
         return None
 
     transcript = stt_res.json().get("text", "").strip()
     conv_id = stt_res.json().get("conv_id")
-    print(f"[STT] {transcript!r}")
+    logger.info("[STT] %r", transcript)
     if not transcript:
         return None
 
@@ -107,11 +109,11 @@ def _pipeline_http(wav_path: str) -> str | None:
         timeout=60,
     )
     if ask_res.status_code != 200:
-        print(f"[ASK] Failed ({ask_res.status_code}): {ask_res.text}")
+        logger.error("[ASK] Failed (%s): %s", ask_res.status_code, ask_res.text)
         return None
 
     answer = ask_res.json().get("answer", "")
-    print(f"[ASK] {answer!r}")
+    logger.info("[ASK] %r", answer)
 
     tts_res = requests.post(
         f"{API_BASE}/v1/ai/tts",
@@ -120,7 +122,7 @@ def _pipeline_http(wav_path: str) -> str | None:
         timeout=60,
     )
     if tts_res.status_code != 200:
-        print(f"[TTS] Failed ({tts_res.status_code}): {tts_res.text}")
+        logger.error("[TTS] Failed (%s): %s", tts_res.status_code, tts_res.text)
         return None
 
     return tts_res.json().get("audio_url")
@@ -133,12 +135,12 @@ def _pipeline_direct(wav_bytes: bytes, flask_app) -> str | None:
 
     with flask_app.app_context():
         transcript = run_stt(wav_bytes, lang="hi")
-        print(f"[STT] {transcript!r}")
+        logger.info("[STT] %r", transcript)
         if not transcript:
             return None
 
         answer = run_ask(transcript)
-        print(f"[ASK] {answer!r}")
+        logger.info("[ASK] %r", answer)
 
         base_url = f"http://{MY_IP}:5000"
         audio_url, _ = run_tts(answer, lang="hi", base_url=base_url)
@@ -153,7 +155,7 @@ def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
         wf.setsampwidth(2)
         wf.setframerate(SAMPLE_RATE)
         wf.writeframes(buffer_data)
-    print(f"\n[Bridge] Saved {filename} ({len(buffer_data)} bytes)")
+    logger.info("[Bridge] Saved %s (%s bytes)", filename, len(buffer_data))
 
     if flask_app is not None:
         audio_url = _pipeline_direct(buffer_data, flask_app)
@@ -163,7 +165,7 @@ def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
     if not audio_url:
         return
 
-    print(f"[MQTT] → ESP32 play: {audio_url}")
+    logger.info("[MQTT] -> ESP32 play: %s", audio_url)
     mqtt_client.publish(
         TOPIC_PUB_RESPONSE,
         json.dumps({"identifier": "audioplay", "inputParams": {"url": audio_url}}),
@@ -175,7 +177,7 @@ def _udp_loop(mqtt_client: mqtt.Client, flask_app=None):
     global audio_chunks
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(("0.0.0.0", UDP_PORT))
-    print(f"[UDP] Listening on {MY_IP}:{UDP_PORT}...")
+    logger.info("[UDP] Listening on %s:%s...", MY_IP, UDP_PORT)
 
     while True:
         data, addr = sock.recvfrom(2048)
@@ -183,15 +185,16 @@ def _udp_loop(mqtt_client: mqtt.Client, flask_app=None):
             token_len = int.from_bytes(data[0:4], byteorder="big")
             payload = data[4 + token_len:]
             if b"STOP" in payload:
-                print(f"\n[UDP] STOP from {addr}")
+                logger.info("[UDP] STOP from %s", addr)
                 if audio_chunks:
                     _handle_audio(b"".join(audio_chunks), mqtt_client, flask_app)
                     audio_chunks = []
             else:
                 audio_chunks.append(payload)
-                print(f"[UDP] Buffering chunk {len(audio_chunks)}...", end="\r")
+                if len(audio_chunks) == 1 or len(audio_chunks) % 25 == 0:
+                    logger.info("[UDP] Buffering chunk %s", len(audio_chunks))
         except Exception:
-            pass
+            logger.exception("[UDP] Failed to process incoming packet")
 
 
 # ─── MQTT ─────────────────────────────────────────────────────────────────────
@@ -201,7 +204,7 @@ def _make_mqtt_client() -> mqtt.Client:
     client.tls_set()
 
     def on_connect(client, _userdata, _flags, _rc, _properties=None):
-        print("[MQTT] Connected.")
+        logger.info("[MQTT] Connected.")
         client.subscribe([
             ("esp32/data", 0),
             ("user/cheekotoy/e4b063b90be8/thing/data/post", 0),
@@ -235,7 +238,7 @@ def _make_mqtt_client() -> mqtt.Client:
                     }),
                 )
         except Exception:
-            pass
+            logger.exception("[MQTT] Failed to process message")
 
     client.on_connect = on_connect
     client.on_message = on_message
@@ -260,7 +263,7 @@ def start_bridge(flask_app=None):
         target=_udp_loop, args=(client, flask_app), daemon=True
     ).start()
 
-    print("[Bridge] MQTT + UDP threads started.")
+    logger.info("[Bridge] MQTT + UDP threads started.")
 
 
 # ─── STANDALONE ENTRY POINT ───────────────────────────────────────────────────
