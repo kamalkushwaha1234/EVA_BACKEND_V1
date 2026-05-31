@@ -166,6 +166,7 @@ def _upload_to_s3(filepath: str, key: str) -> str | None:
         return upload(filepath, key)
     except Exception:
         logger.warning("[S3] Upload skipped, using local fallback")
+        logger.debug("[S3] Upload error details:", exc_info=True)
         return None
 
 
