@@ -68,6 +68,13 @@ def create_app(config_class=Config):
     socketio.init_app(app, cors_allowed_origins="*", async_mode="eventlet")
     limiter.init_app(app)
 
+    from bridge import start_bridge
+    try:
+        start_bridge(app)
+        app.logger.info("Bridge started successfully")
+    except Exception as e:
+        app.logger.warning(f"Bridge failed to start (continuing without it): {e}")
+
     from app.api.v1 import (  # noqa: E402
         auth, devices, conversations, subscriptions, device_api, ota, ai
     )

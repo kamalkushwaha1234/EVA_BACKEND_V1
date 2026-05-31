@@ -176,6 +176,7 @@ def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
 def _udp_loop(mqtt_client: mqtt.Client, flask_app=None):
     global audio_chunks
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     sock.bind(("0.0.0.0", UDP_PORT))
     logger.info("[UDP] Listening on %s:%s...", MY_IP, UDP_PORT)
 
