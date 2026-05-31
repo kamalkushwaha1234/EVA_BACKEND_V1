@@ -29,7 +29,6 @@ def upload(file_path: str, key: str) -> str | None:
             Filename=file_path,
             Bucket=bucket,
             Key=key,
-            ExtraArgs={"ACL": "public-read"},
         )
         public_url = current_app.config["S3_PUBLIC_URL"]
         if public_url:
@@ -53,7 +52,6 @@ def upload_bytes(data: bytes, key: str, content_type: str = "audio/mpeg") -> str
             Key=key,
             Body=data,
             ContentType=content_type,
-            ACL="public-read",
         )
         public_url = current_app.config["S3_PUBLIC_URL"]
         if public_url:
