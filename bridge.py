@@ -14,6 +14,7 @@ import os
 import socket
 import threading
 import wave
+import io
 
 import paho.mqtt.client as mqtt
 import requests
@@ -193,8 +194,19 @@ def _pipeline_direct(wav_bytes: bytes, flask_app) -> str | None:
 
 
 # ─── AUDIO PROCESSING ─────────────────────────────────────────────────────────
+def _make_wav(raw_pcm: bytes) -> bytes:
+    buf = io.BytesIO()
+    with wave.open(buf, "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(SAMPLE_RATE)
+        wf.writeframes(raw_pcm)
+    return buf.getvalue()
+
+
 def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
     filename = "recording.wav"
+    wav_bytes = _make_wav(buffer_data)
     with wave.open(filename, "wb") as wf:
         wf.setnchannels(1)
         wf.setsampwidth(2)
@@ -203,7 +215,7 @@ def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
     logger.info("[Bridge] Saved %s (%s bytes)", filename, len(buffer_data))
 
     if flask_app is not None:
-        audio_url = _pipeline_direct(buffer_data, flask_app)
+        audio_url = _pipeline_direct(wav_bytes, flask_app)
     else:
         audio_url = _pipeline_http(filename)
 
