@@ -162,7 +162,7 @@ def serve_audio(filename):
 @jwt_required()
 @limiter.limit("60 per minute")
 def speech_to_text():
-    lang = request.form.get("lang", "en")
+    lang = request.form.get("lang", "hi")
     conv_id = request.form.get("conv_id")
 
     audio_file = request.files.get("file")

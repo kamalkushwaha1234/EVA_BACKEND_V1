@@ -185,7 +185,10 @@ def _pipeline_direct(wav_bytes: bytes, flask_app) -> str | None:
         if not transcript:
             return None
 
-        answer = run_ask(transcript)
+        answer = run_ask(
+            transcript,
+            system_prompt="You are a helpful AI tutor. Always respond in Hindi language only, using simple words suitable for children.",
+        )
         logger.info("[ASK] %r", answer)
 
         base_url = f"http://{MY_IP}:5000"
