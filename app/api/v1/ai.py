@@ -14,6 +14,8 @@ from flask_jwt_extended import get_jwt_identity, jwt_required
 from app.extensions import db, limiter
 from app.models import Conversation, Device, Message
 from app.utils.errors import error_response
+import logging
+logger = logging.getLogger(__name__)
 
 bp = Blueprint("ai", __name__)
 
