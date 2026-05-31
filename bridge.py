@@ -221,10 +221,10 @@ def _make_mqtt_client() -> mqtt.Client:
                         "identifier": "updatetoken",
                         "inputParams": {"token": "SECRET"},
                     }),
-                )
+                logger.info("[MQTT] Received login request, sent token update"))
             elif identifier == "data_config":
                 client.publish(
-                    TOPIC_PUB_RESPONSE,
+                    TOPIC_PUB   _RESPONSE,
                     json.dumps({
                         "identifier": "updateconfig",
                         "inputParams": {
@@ -237,6 +237,7 @@ def _make_mqtt_client() -> mqtt.Client:
                         },
                     }),
                 )
+                logger.info("[MQTT] Received config request, sent config update")
         except Exception:
             logger.exception("[MQTT] Failed to process message")
 
