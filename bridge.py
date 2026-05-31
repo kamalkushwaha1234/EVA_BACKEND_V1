@@ -235,7 +235,8 @@ def _make_mqtt_client() -> mqtt.Client:
                         "identifier": "updatetoken",
                         "inputParams": {"token": "SECRET"},
                     }),
-                logger.info("[MQTT] Received login request, sent token update"))
+                )
+                logger.info("[MQTT] Received login request, sent token update")
             elif identifier == "data_config":
                 client.publish(
                     TOPIC_PUB_RESPONSE,
