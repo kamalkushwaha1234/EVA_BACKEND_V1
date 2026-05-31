@@ -147,8 +147,24 @@ def run_tts(text: str, lang: str = "en", base_url: str = "") -> tuple[str, str]:
     voice = VOICE_MAP.get(lang, VOICE_MAP["en"])
     audio_id = uuid.uuid4().hex
     filename = f"{audio_id}.mp3"
-    _run_tts_sync(text, voice, os.path.join(UPLOAD_DIR, filename))
+    filepath = os.path.join(UPLOAD_DIR, filename)
+    _run_tts_sync(text, voice, filepath)
+
+    s3_url = _upload_to_s3(filepath, filename)
+    if s3_url:
+        os.remove(filepath)
+        return s3_url, filename
+
     return f"{base_url}/v1/ai/audio/{filename}", filename
+
+
+def _upload_to_s3(filepath: str, key: str) -> str | None:
+    try:
+        from app.s3 import upload
+        return upload(filepath, key)
+    except Exception:
+        logger.warning("[S3] Upload skipped, using local fallback")
+        return None
 
 
 # ─── HTTP ENDPOINTS ───────────────────────────────────────────────────────────

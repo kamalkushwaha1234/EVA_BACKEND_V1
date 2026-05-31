@@ -15,6 +15,7 @@ import socket
 import threading
 import wave
 import io
+import uuid
 
 import paho.mqtt.client as mqtt
 import requests
@@ -207,20 +208,40 @@ def _make_wav(raw_pcm: bytes) -> bytes:
     return buf.getvalue()
 
 
+def _save_and_upload_wav(wav_bytes: bytes, key: str, flask_app=None):
+    from app.s3 import upload
+
+    local = "recording.wav"
+    with open(local, "wb") as f:
+        f.write(wav_bytes)
+    logger.info("[Bridge] Saved %s (%s bytes)", key, len(wav_bytes))
+
+    if flask_app is not None:
+        try:
+            with flask_app.app_context():
+                s3_url = upload(local, key)
+            if s3_url:
+                logger.info("[Bridge] Uploaded recording to S3: %s", s3_url)
+        except Exception:
+            pass
+    if os.path.exists(local):
+        os.remove(local)
+
+
 def _handle_audio(buffer_data: bytes, mqtt_client: mqtt.Client, flask_app=None):
-    filename = "recording.wav"
     wav_bytes = _make_wav(buffer_data)
-    with wave.open(filename, "wb") as wf:
-        wf.setnchannels(1)
-        wf.setsampwidth(2)
-        wf.setframerate(SAMPLE_RATE)
-        wf.writeframes(buffer_data)
-    logger.info("[Bridge] Saved %s (%s bytes)", filename, len(buffer_data))
+
+    recording_id = uuid.uuid4().hex
+    recording_key = f"recordings/{recording_id}.wav"
+    _save_and_upload_wav(wav_bytes, recording_key, flask_app)
 
     if flask_app is not None:
         audio_url = _pipeline_direct(wav_bytes, flask_app)
     else:
-        audio_url = _pipeline_http(filename)
+        local_path = "recording.wav"
+        with open(local_path, "wb") as f:
+            f.write(wav_bytes)
+        audio_url = _pipeline_http(local_path)
 
     if not audio_url:
         return
