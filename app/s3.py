@@ -14,7 +14,7 @@ def _client():
     if cfg["S3_ACCESS_KEY"] and cfg["S3_SECRET_KEY"]:
         kwargs["aws_access_key_id"] = cfg["S3_ACCESS_KEY"]
         kwargs["aws_secret_access_key"] = cfg["S3_SECRET_KEY"]
-    return _boto3.client("s3", **kwargs)
+    return boto3.client("s3", **kwargs)
 
 
 def upload(file_path: str, key: str) -> str | None:
