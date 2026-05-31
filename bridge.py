@@ -56,14 +56,45 @@ def _local_ip() -> str:
 def _public_ip() -> str:
     env_ip = os.environ.get("PUBLIC_IP")
     if env_ip:
+        logger.info("[Net] Using PUBLIC_IP from env: %s", env_ip)
         return env_ip
-    try:
-        resp = requests.get("http://169.254.169.254/latest/meta-data/public-ipv4", timeout=5)
-        if resp.status_code == 200:
-            return resp.text.strip()
-    except Exception:
-        pass
-    return _local_ip()
+    # Try IMDSv2 first, then v1
+    session = requests.Session()
+    for _ in range(2):
+        try:
+            token_resp = session.put(
+                "http://169.254.169.254/latest/api/token",
+                headers={"X-aws-ec2-metadata-token-ttl-seconds": "60"},
+                timeout=3,
+            )
+            if token_resp.status_code == 200:
+                token = token_resp.text.strip()
+                resp = session.get(
+                    "http://169.254.169.254/latest/meta-data/public-ipv4",
+                    headers={"X-aws-ec2-metadata-token": token},
+                    timeout=3,
+                )
+                if resp.status_code == 200:
+                    ip = resp.text.strip()
+                    logger.info("[Net] Detected public IP (IMDSv2): %s", ip)
+                    return ip
+        except Exception:
+            pass
+        # Fallback to IMDSv1 (single retry)
+        try:
+            resp = requests.get(
+                "http://169.254.169.254/latest/meta-data/public-ipv4",
+                timeout=3,
+            )
+            if resp.status_code == 200:
+                ip = resp.text.strip()
+                logger.info("[Net] Detected public IP (IMDSv1): %s", ip)
+                return ip
+        except Exception:
+            pass
+    ip = _local_ip()
+    logger.info("[Net] Falling back to local IP: %s", ip)
+    return ip
 
 
 MY_IP = _public_ip()
