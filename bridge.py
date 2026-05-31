@@ -53,7 +53,20 @@ def _local_ip() -> str:
         s.close()
 
 
-MY_IP = _local_ip()
+def _public_ip() -> str:
+    env_ip = os.environ.get("PUBLIC_IP")
+    if env_ip:
+        return env_ip
+    try:
+        resp = requests.get("http://169.254.169.254/latest/meta-data/public-ipv4", timeout=5)
+        if resp.status_code == 200:
+            return resp.text.strip()
+    except Exception:
+        pass
+    return _local_ip()
+
+
+MY_IP = _public_ip()
 
 
 # ─── HTTP FALLBACK (standalone mode) ──────────────────────────────────────────
