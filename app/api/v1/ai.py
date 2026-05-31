@@ -97,7 +97,9 @@ def run_stt(wav_bytes: bytes, lang: str = "en") -> str:
             capture_output=True,
         )
         with open(output_txt, "r", encoding="utf-8") as f:
-            return f.read().strip()
+            transcription = f.read().strip()
+            logger.info("[STT] Transcription successful: %s", transcription)
+            return transcription
     finally:
         for p in (audio_path, output_txt):
             if os.path.exists(p):
