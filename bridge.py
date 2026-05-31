@@ -39,6 +39,7 @@ API_PASSWORD = os.environ.get("BRIDGE_PASSWORD", "")
 
 audio_chunks: list[bytes] = []
 _http_token: str = ""
+_bridge_started: bool = False
 
 
 # ─── NETWORK HELPERS ──────────────────────────────────────────────────────────
@@ -300,7 +301,11 @@ def start_bridge(flask_app=None):
     Pass a Flask app instance to use direct function calls (embedded mode).
     Leave flask_app=None to use HTTP calls (standalone mode).
     """
-    global _http_token
+    global _http_token, _bridge_started
+    if _bridge_started:
+        logger.warning("[Bridge] Already started, skipping duplicate.")
+        return
+    _bridge_started = True
 
     client = _make_mqtt_client()
     client.connect(MQTT_BROKER, MQTT_PORT)
