@@ -52,6 +52,7 @@ def upload_bytes(data: bytes, key: str, content_type: str = "audio/mpeg") -> str
             Key=key,
             Body=data,
             ContentType=content_type,
+            ContentDisposition='inline'
         )
         public_url = current_app.config["S3_PUBLIC_URL"]
         if public_url:
