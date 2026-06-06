@@ -1,10 +1,12 @@
 import asyncio
 import os
-import subprocess
 import threading
+import time
 import uuid
 
+import boto3
 import edge_tts
+import requests
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
 from azure.core.credentials import AzureKeyCredential
@@ -75,35 +77,54 @@ def _run_tts_sync(text: str, voice: str, path: str) -> None:
 
 
 def run_stt(wav_bytes: bytes, lang: str = "en") -> str:
-    """Transcribe raw WAV bytes via Whisper. Requires Flask app context."""
+    """Transcribe WAV bytes via Amazon Transcribe. Requires Flask app context."""
     audio_id = uuid.uuid4().hex
-    audio_path = os.path.join(UPLOAD_DIR, f"{audio_id}.wav")
-    output_txt = os.path.join(UPLOAD_DIR, f"{audio_id}.txt")
-    try:
-        with open(audio_path, "wb") as f:
-            f.write(wav_bytes)
-        subprocess.run(
-            [
-                current_app.config["WHISPER_BIN"],
-                "-m", current_app.config["WHISPER_MODEL"],
-                "-f", audio_path,
-                "-l", lang,
-                "-t", "1",
-                "--no-timestamps",
-                "--output-txt",
-                "--output-file", os.path.join(UPLOAD_DIR, audio_id),
-            ],
-            check=True,
-            capture_output=True,
-        )
-        with open(output_txt, "r", encoding="utf-8") as f:
-            transcription = f.read().strip()
-            logger.info("[STT] Transcription successful: %s", transcription)
-            return transcription
-    finally:
-        for p in (audio_path, output_txt):
-            if os.path.exists(p):
-                os.remove(p)
+    s3_key = f"transcribe/{audio_id}.wav"
+
+    from app.s3 import upload_bytes
+    s3_url = upload_bytes(wav_bytes, s3_key, content_type="audio/wav")
+    if not s3_url:
+        raise RuntimeError("Failed to upload audio to S3 for transcription")
+
+    transcribe = boto3.client("transcribe", region_name=current_app.config["S3_REGION"])
+    job_name = f"stt-{audio_id}"
+
+    lang_map = {"hi": "hi-IN", "en": "en-IN"}
+    language_code = lang_map.get(lang, "en-IN")
+
+    transcribe.start_transcription_job(
+        TranscriptionJobName=job_name,
+        Media={"MediaFileUri": s3_url},
+        MediaFormat="wav",
+        LanguageCode=language_code,
+    )
+
+    timeout = 120
+    poll = 5
+    elapsed = 0
+    while elapsed < timeout:
+        status = transcribe.get_transcription_job(TranscriptionJobName=job_name)
+        job_status = status["TranscriptionJob"]["TranscriptionJobStatus"]
+        if job_status == "COMPLETED":
+            transcript_url = status["TranscriptionJob"]["Transcript"]["TranscriptFileUri"]
+            resp = requests.get(transcript_url, timeout=30)
+            transcript = resp.json()["results"]["transcripts"][0]["transcript"]
+
+            try:
+                s3 = boto3.client("s3", region_name=current_app.config["S3_REGION"])
+                s3.delete_object(Bucket=current_app.config["S3_BUCKET"], Key=s3_key)
+            except Exception:
+                pass
+
+            return transcript.strip()
+        elif job_status == "FAILED":
+            reason = status["TranscriptionJob"].get("FailureReason", "Unknown")
+            raise RuntimeError(f"Transcription failed: {reason}")
+
+        time.sleep(poll)
+        elapsed += poll
+
+    raise RuntimeError("Transcription timed out")
 
 
 def run_ask(
@@ -193,8 +214,6 @@ def speech_to_text():
     try:
         text = run_stt(audio_file.read(), lang=lang)
         return jsonify({"language": lang, "text": text, "conv_id": conv_id})
-    except subprocess.CalledProcessError as e:
-        return error_response("STT_FAILED", e.stderr.decode(errors="replace"), 500)
     except Exception as e:
         return error_response("STT_FAILED", str(e), 500)
 

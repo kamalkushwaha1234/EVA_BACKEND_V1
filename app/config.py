@@ -37,10 +37,4 @@ class Config:
     S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
     S3_PUBLIC_URL = os.environ.get("S3_PUBLIC_URL", "")  # CloudFront / custom domain
 
-    # Whisper (STT)
-    WHISPER_BIN = os.environ.get(
-        "WHISPER_BIN", os.path.join(_ROOT, "build", "bin", "whisper-cli")
-    )
-    WHISPER_MODEL = os.environ.get(
-        "WHISPER_MODEL", os.path.join(_ROOT, "models", "ggml-tiny.bin")
-    )
+    # STT config (reserved for future use)
