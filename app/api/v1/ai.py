@@ -53,10 +53,12 @@ def _run_tts_sync(text: str, voice: str, path: str) -> None:
     """Synthesize speech via Amazon Polly. Requires Flask app context."""
     region = current_app.config.get("S3_REGION", "ap-south-1")
     polly = boto3.client("polly", region_name=region)
+    engine = "generative" if voice == "Kajal" else "neural"
     response = polly.synthesize_speech(
         Text=text,
         OutputFormat="mp3",
         VoiceId=voice,
+        Engine=engine,
     )
     with open(path, "wb") as f:
         f.write(response["AudioStream"].read())
