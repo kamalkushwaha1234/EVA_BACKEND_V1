@@ -29,8 +29,7 @@ def upload(file_path: str, key: str) -> str | None:
             Filename=file_path,
             Bucket=bucket,
             Key=key,
-            ContentType="audio/mpeg",
-            ContentDisposition='inline',
+            ExtraArgs={"ContentType": "audio/mpeg", "ContentDisposition": "inline"},
         )
         public_url = current_app.config["S3_PUBLIC_URL"]
         if public_url:

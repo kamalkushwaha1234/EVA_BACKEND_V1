@@ -1,9 +1,7 @@
-import asyncio
 import os
-import threading
 import uuid
 
-import edge_tts
+import boto3
 import requests
 from azure.ai.inference import ChatCompletionsClient
 from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
@@ -24,8 +22,8 @@ UPLOAD_DIR = os.path.join(_BASE, "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 VOICE_MAP = {
-    "en": "en-US-AriaNeural",
-    "hi": "hi-IN-MadhurNeural",
+    "en": "Matthew",
+    "hi": "Kajal",
 }
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -52,26 +50,16 @@ def _get_azure_client() -> ChatCompletionsClient:
 
 
 def _run_tts_sync(text: str, voice: str, path: str) -> None:
-    """Run edge_tts in a fresh thread+event loop to avoid eventlet conflicts."""
-    exc_box: list[Exception] = []
-
-    def _target():
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        try:
-            loop.run_until_complete(
-                edge_tts.Communicate(text=text, voice=voice).save(path)
-            )
-        except Exception as e:
-            exc_box.append(e)
-        finally:
-            loop.close()
-
-    t = threading.Thread(target=_target, daemon=True)
-    t.start()
-    t.join()
-    if exc_box:
-        raise exc_box[0]
+    """Synthesize speech via Amazon Polly. Requires Flask app context."""
+    region = current_app.config.get("S3_REGION", "ap-south-1")
+    polly = boto3.client("polly", region_name=region)
+    response = polly.synthesize_speech(
+        Text=text,
+        OutputFormat="mp3",
+        VoiceId=voice,
+    )
+    with open(path, "wb") as f:
+        f.write(response["AudioStream"].read())
 
 
 def run_stt(wav_bytes: bytes, lang: str = "hi") -> str:
