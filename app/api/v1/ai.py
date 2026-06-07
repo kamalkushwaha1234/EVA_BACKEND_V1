@@ -1,10 +1,8 @@
 import asyncio
 import os
 import threading
-import time
 import uuid
 
-import boto3
 import edge_tts
 import requests
 from azure.ai.inference import ChatCompletionsClient
@@ -76,55 +74,33 @@ def _run_tts_sync(text: str, voice: str, path: str) -> None:
         raise exc_box[0]
 
 
-def run_stt(wav_bytes: bytes, lang: str = "en") -> str:
-    """Transcribe WAV bytes via Amazon Transcribe. Requires Flask app context."""
-    audio_id = uuid.uuid4().hex
-    s3_key = f"transcribe/{audio_id}.wav"
+def run_stt(wav_bytes: bytes, lang: str = "hi") -> str:
+    """Transcribe WAV bytes via Deepgram REST API. Requires Flask app context."""
+    api_key = current_app.config.get("DEEPGRAM_API_KEY")
+    if not api_key:
+        raise RuntimeError("DEEPGRAM_API_KEY not configured")
 
-    from app.s3 import upload_bytes
-    s3_url = upload_bytes(wav_bytes, s3_key, content_type="audio/wav")
-    if not s3_url:
-        raise RuntimeError("Failed to upload audio to S3 for transcription")
+    lang_map = {"hi": "hi", "en": "en"}
+    language = lang_map.get(lang, "hi")
 
-    transcribe = boto3.client("transcribe", region_name=current_app.config["S3_REGION"])
-    job_name = f"stt-{audio_id}"
-
-    lang_map = {"hi": "hi-IN", "en": "en-IN"}
-    language_code = lang_map.get(lang, "en-IN")
-
-    transcribe.start_transcription_job(
-        TranscriptionJobName=job_name,
-        Media={"MediaFileUri": s3_url},
-        MediaFormat="wav",
-        LanguageCode=language_code,
+    resp = requests.post(
+        "https://api.deepgram.com/v1/listen",
+        params={
+            "model": "nova-3",
+            "language": language,
+            "punctuate": "true",
+        },
+        headers={
+            "Authorization": f"Token {api_key}",
+            "Content-Type": "audio/wav",
+        },
+        data=wav_bytes,
+        timeout=60,
     )
-
-    timeout = 120
-    poll = 5
-    elapsed = 0
-    while elapsed < timeout:
-        status = transcribe.get_transcription_job(TranscriptionJobName=job_name)
-        job_status = status["TranscriptionJob"]["TranscriptionJobStatus"]
-        if job_status == "COMPLETED":
-            transcript_url = status["TranscriptionJob"]["Transcript"]["TranscriptFileUri"]
-            resp = requests.get(transcript_url, timeout=30)
-            transcript = resp.json()["results"]["transcripts"][0]["transcript"]
-
-            try:
-                s3 = boto3.client("s3", region_name=current_app.config["S3_REGION"])
-                s3.delete_object(Bucket=current_app.config["S3_BUCKET"], Key=s3_key)
-            except Exception:
-                pass
-
-            return transcript.strip()
-        elif job_status == "FAILED":
-            reason = status["TranscriptionJob"].get("FailureReason", "Unknown")
-            raise RuntimeError(f"Transcription failed: {reason}")
-
-        time.sleep(poll)
-        elapsed += poll
-
-    raise RuntimeError("Transcription timed out")
+    resp.raise_for_status()
+    result = resp.json()
+    transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+    return transcript.strip()
 
 
 def run_ask(
