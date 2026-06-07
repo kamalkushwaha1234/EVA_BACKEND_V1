@@ -23,7 +23,7 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 VOICE_MAP = {
     "en": "Matthew",
-    "hi": "Kajal",
+    "hi": "Aditi",
 }
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -53,7 +53,7 @@ def _run_tts_sync(text: str, voice: str, path: str) -> None:
     """Synthesize speech via Amazon Polly. Requires Flask app context."""
     region = current_app.config.get("S3_REGION", "ap-south-1")
     polly = boto3.client("polly", region_name=region)
-    engine = "generative" if voice == "Kajal" else "neural"
+    engine = "neural" if voice == "Matthew" else "standard"
     response = polly.synthesize_speech(
         Text=text,
         OutputFormat="mp3",
