@@ -1,6 +1,9 @@
+import logging
 from functools import wraps
 from flask_jwt_extended import verify_jwt_in_request, get_jwt
 from app.utils.errors import error_response
+
+logger = logging.getLogger(__name__)
 
 
 def require_scope(*scopes):
@@ -12,6 +15,7 @@ def require_scope(*scopes):
             token_scopes = set(get_jwt().get("scope", "").split())
             missing = [s for s in scopes if s not in token_scopes]
             if missing:
+                logger.warning("Scope check failed required=%s", ",".join(missing))
                 return error_response(
                     "FORBIDDEN_SCOPE",
                     f"Token lacks required scope(s): {', '.join(missing)}",

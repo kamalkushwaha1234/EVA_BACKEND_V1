@@ -9,6 +9,9 @@ _ROOT = os.path.dirname(_HERE)
 
 
 class Config:
+    LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
+    LOG_FILE = os.environ.get("LOG_FILE", os.path.join(_ROOT, "logFile.log"))
+
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
     SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///eva.db")
     SQLALCHEMY_TRACK_MODIFICATIONS = False

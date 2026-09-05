@@ -1,5 +1,6 @@
 import re
 import uuid
+import logging
 from datetime import datetime, timedelta
 
 import bcrypt
@@ -17,6 +18,7 @@ from app.models import User
 from app.utils.errors import error_response
 
 bp = Blueprint("auth", __name__)
+logger = logging.getLogger(__name__)
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -68,9 +70,11 @@ def register():
     if not password or not (8 <= len(password) <= 128):
         errors["password"] = "Password must be 8–128 characters."
     if errors:
+        logger.warning("Registration validation failed")
         return error_response("VALIDATION_FAILED", "Validation failed.", 400, errors)
 
     if User.query.filter_by(email=email).first():
+        logger.warning("Registration rejected for existing account")
         return error_response("EMAIL_ALREADY_REGISTERED", "An account with this email exists.", 409)
 
     pwd_hash = bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
@@ -83,6 +87,7 @@ def register():
     db.session.commit()
 
     access_token, refresh_token = _make_token_pair(user.id)
+    logger.info("User registered user_id=%s", user.id)
     return jsonify({
         "user": user.to_dict(),
         **_token_pair_response(access_token, refresh_token),
@@ -103,11 +108,13 @@ def login():
     now = datetime.utcnow()
 
     if user and user.locked_until and user.locked_until > now:
+        logger.warning("Login rejected for locked account")
         return error_response("INVALID_CREDENTIALS", "Email or password incorrect.", 401)
 
     valid = user and bcrypt.checkpw(password.encode(), user.pwd_hash.encode())
 
     if not valid:
+        logger.warning("Login failed")
         if user:
             user.failed_logins = (user.failed_logins or 0) + 1
             if user.failed_logins >= 5:
@@ -121,6 +128,7 @@ def login():
     db.session.commit()
 
     access_token, refresh_token = _make_token_pair(user.id)
+    logger.info("User logged in user_id=%s", user.id)
     return jsonify(_token_pair_response(access_token, refresh_token))
 
 
@@ -138,15 +146,18 @@ def refresh():
     if jti in _revoked_jtis:
         # Theft detection: reuse of a consumed token; revoke the whole family
         # (here we just reject — family tracking needs a DB table in production)
+        logger.warning("Refresh rejected for revoked token user_id=%s", user_id)
         return error_response("TOKEN_INVALID", "Refresh token has been revoked.", 401)
 
     logout_ts = _logout_timestamps.get(user_id)
     if logout_ts and iat < logout_ts:
+        logger.warning("Refresh rejected after logout user_id=%s", user_id)
         return error_response("TOKEN_INVALID", "Refresh token has been revoked.", 401)
 
     _revoked_jtis.add(jti)  # single-use rotation
 
     access_token, refresh_token = _make_token_pair(user_id)
+    logger.info("Access token refreshed user_id=%s", user_id)
     return jsonify(_token_pair_response(access_token, refresh_token))
 
 
@@ -158,4 +169,5 @@ def refresh():
 def logout():
     user_id = get_jwt_identity()
     _logout_timestamps[user_id] = datetime.utcnow().timestamp()
+    logger.info("User logged out user_id=%s", user_id)
     return "", 204

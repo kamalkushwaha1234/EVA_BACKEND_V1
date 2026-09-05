@@ -1,7 +1,10 @@
+import logging
 from functools import wraps
 from flask import request
 from app.models import Device
 from app.utils.errors import error_response
+
+logger = logging.getLogger(__name__)
 
 
 def require_device_cert(fn):
@@ -19,14 +22,18 @@ def require_device_cert(fn):
     def wrapper(*args, **kwargs):
         cert_fp = request.headers.get("X-SSL-Client-Fingerprint", "").strip()
         if not cert_fp:
+            logger.warning("Device request rejected: certificate missing")
             return error_response("CERT_MISSING", "mTLS client certificate required.", 403)
 
         device = Device.query.filter_by(cert_fp=cert_fp).first()
         if not device:
+            logger.warning("Device request rejected: certificate unknown")
             return error_response("CERT_REVOKED", "Certificate unknown or revoked.", 403)
         if device.cert_revoked:
+            logger.warning("Device request rejected: certificate revoked device_id=%s", device.id)
             return error_response("CERT_REVOKED", "Certificate has been revoked.", 403)
 
         request.device = device
+        logger.debug("Device certificate authenticated device_id=%s", device.id)
         return fn(*args, **kwargs)
     return wrapper

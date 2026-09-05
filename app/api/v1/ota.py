@@ -1,4 +1,5 @@
 import hashlib
+import logging
 
 from flask import Blueprint, jsonify, request
 
@@ -8,6 +9,7 @@ from app.utils.errors import error_response
 from app.utils.mtls import require_device_cert
 
 bp = Blueprint("ota", __name__)
+logger = logging.getLogger(__name__)
 
 
 def _semver_tuple(v: str):
@@ -48,13 +50,16 @@ def check_ota():
     # Pick the highest version greater than current
     newer = [r for r in release if _semver_tuple(r.version) > _semver_tuple(current)]
     if not newer:
+        logger.info("OTA update unavailable device_id=%s model=%s", device.id, model)
         return "", 204
 
     latest = max(newer, key=lambda r: _semver_tuple(r.version))
 
     if not _in_rollout(device.id, latest.rollout_pct):
+        logger.info("OTA update outside rollout device_id=%s version=%s", device.id, latest.version)
         return "", 204
 
+    logger.info("OTA update offered device_id=%s version=%s", device.id, latest.version)
     return jsonify(latest.to_manifest())
 
 
@@ -68,6 +73,7 @@ def download_blob(version):
     if not release:
         return error_response("VERSION_NOT_FOUND", "No release with that version.", 404)
 
+    logger.info("OTA blob requested version=%s", version)
     # In production, redirect to a short-lived signed S3/GCS URL:
     #   return redirect(generate_signed_url(release.blob_url))
     # For now we return the raw blob_url so the device can fetch it directly.

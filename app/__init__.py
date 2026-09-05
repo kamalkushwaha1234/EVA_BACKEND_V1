@@ -4,13 +4,16 @@ from pathlib import Path
 from time import perf_counter
 
 from flask import Flask, g, request
+from werkzeug.exceptions import HTTPException
 from app.config import Config
 from app.extensions import db, jwt, socketio, limiter
 
 
 def _configure_logging(app: Flask) -> None:
     root_logger = logging.getLogger()
-    log_path = Path(app.root_path).parent / "logFile.log"
+    log_level = getattr(logging, app.config.get("LOG_LEVEL", "INFO").upper(), logging.INFO)
+    log_path = Path(app.config.get("LOG_FILE", Path(app.root_path).parent / "logFile.log"))
+    log_path.parent.mkdir(parents=True, exist_ok=True)
     log_path.touch(exist_ok=True)
 
     if not any(
@@ -19,14 +22,14 @@ def _configure_logging(app: Flask) -> None:
         for handler in root_logger.handlers
     ):
         file_handler = FileHandler(log_path, encoding="utf-8")
-        file_handler.setLevel(logging.INFO)
+        file_handler.setLevel(log_level)
         file_handler.setFormatter(
             Formatter("%(asctime)s %(levelname)s [%(name)s] %(message)s")
         )
         root_logger.addHandler(file_handler)
 
-    root_logger.setLevel(logging.INFO)
-    app.logger.setLevel(logging.INFO)
+    root_logger.setLevel(log_level)
+    app.logger.setLevel(log_level)
     app.logger.info("Application logging initialized at %s", log_path)
 
 
@@ -55,6 +58,13 @@ def _register_request_logging(app: Flask) -> None:
             duration_ms,
         )
         return response
+
+    @app.errorhandler(Exception)
+    def _log_unhandled_exception(error):
+        if isinstance(error, HTTPException):
+            return error
+        app.logger.exception("Unhandled application exception: %s", error)
+        return {"error": {"code": "INTERNAL_ERROR", "message": "Internal server error."}}, 500
 
 
 def create_app(config_class=Config):

@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 from flask import Blueprint, jsonify, request
@@ -9,6 +10,7 @@ from app.utils.auth import require_scope
 from app.utils.errors import error_response
 
 bp = Blueprint("subscriptions", __name__)
+logger = logging.getLogger(__name__)
 
 VALID_PLANS = {"free", "plus", "pro"}
 
@@ -66,6 +68,7 @@ def change_plan():
                 device_id=device_id,
             ))
         db.session.commit()
+        logger.info("Subscription changed user_id=%s plan=%s", user_id, plan)
         return jsonify({"status": "changed", "checkout_url": None})
 
     # Paid upgrade — return a Stripe checkout URL (placeholder)
@@ -74,4 +77,5 @@ def change_plan():
         f"&user={user_id}"
         + (f"&device={device_id}" if device_id else "")
     )
+    logger.info("Subscription checkout created user_id=%s plan=%s", user_id, plan)
     return jsonify({"status": "pending_checkout", "checkout_url": checkout_url})

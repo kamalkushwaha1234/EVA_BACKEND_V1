@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime
 
@@ -7,6 +8,8 @@ from flask_socketio import disconnect, emit, join_room, leave_room
 
 from app.extensions import socketio
 from app.models import Device
+
+logger = logging.getLogger(__name__)
 
 # sid -> user_id
 _connected: dict[str, str] = {}
@@ -29,6 +32,7 @@ def _evt_id() -> str:
 def on_connect(auth):
     token = request.args.get("token") or (auth or {}).get("token", "")
     if not token:
+        logger.warning("WebSocket connection rejected: token missing")
         disconnect()
         return False
     try:
@@ -39,6 +43,7 @@ def on_connect(auth):
         _connected[request.sid] = user_id
         _subscriptions.setdefault(user_id, set())
     except Exception:
+        logger.warning("WebSocket connection rejected: invalid token", exc_info=True)
         disconnect()
         return False
 
@@ -49,6 +54,7 @@ def on_disconnect():
     if user_id:
         # Clean up rooms — Flask-SocketIO handles room membership automatically on disconnect
         _subscriptions.pop(user_id, None)
+        logger.info("WebSocket disconnected user_id=%s", user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -72,6 +78,7 @@ def on_subscribe(data):
             continue
         join_room(f"device:{device_id}")
         _subscriptions[user_id].add(device_id)
+        logger.info("WebSocket device subscribed user_id=%s device_id=%s", user_id, device_id)
 
 
 @socketio.on("unsubscribe")
@@ -82,6 +89,7 @@ def on_unsubscribe(data):
         leave_room(f"device:{device_id}")
         if user_id:
             _subscriptions.get(user_id, set()).discard(device_id)
+            logger.info("WebSocket device unsubscribed user_id=%s device_id=%s", user_id, device_id)
 
 
 @socketio.on("pong")
@@ -104,6 +112,7 @@ def push_event(device_id: str, event_type: str, data: dict):
         },
         room=f"device:{device_id}",
     )
+    logger.debug("WebSocket event emitted device_id=%s event_type=%s", device_id, event_type)
 
 
 def push_transcript_partial(device_id: str, conv_id: str, role: str, text: str):

@@ -1,4 +1,5 @@
 import json
+import logging
 import uuid
 from datetime import datetime, timedelta
 
@@ -11,6 +12,7 @@ from app.utils.auth import require_scope
 from app.utils.errors import error_response
 
 bp = Blueprint("devices", __name__)
+logger = logging.getLogger(__name__)
 
 # Idempotency key store (use Redis + TTL in production)
 _idempotency_cache: dict[str, dict] = {}
@@ -33,7 +35,7 @@ def _publish_command(device_id: str, payload: str):
             qos=1,
         )
     except Exception:
-        pass
+        logger.exception("MQTT command publish failed device_id=%s", device_id)
 
 
 # ---------------------------------------------------------------------------
@@ -46,6 +48,7 @@ def _publish_command(device_id: str, payload: str):
 def claim_device():
     idem_key = request.headers.get("Idempotency-Key", "").strip()
     if idem_key and idem_key in _idempotency_cache:
+        logger.info("Returning idempotent device claim response")
         return jsonify(_idempotency_cache[idem_key]), 201
     data = request.get_json(silent=True) or {}
     serial = data.get("serial", "").strip()
@@ -77,6 +80,7 @@ def claim_device():
     result = device.to_dict()
     if idem_key:
         _idempotency_cache[idem_key] = result
+    logger.info("Device claimed device_id=%s user_id=%s", device.id, user_id)
     return jsonify(result), 201
 
 
@@ -147,6 +151,7 @@ def update_device(device_id):
             return error_response("VALIDATION_FAILED", "Name must be 1–60 characters.", 400)
         device.name = name
         db.session.commit()
+        logger.info("Device updated device_id=%s user_id=%s", device_id, user_id)
 
     return jsonify(device.to_dict())
 
@@ -176,6 +181,7 @@ def unclaim_device(device_id):
     device.claimed_at = None
     device.online = False
     db.session.commit()
+    logger.info("Device unclaimed device_id=%s user_id=%s", device_id, user_id)
     return "", 204
 
 
@@ -218,6 +224,8 @@ def send_command(device_id):
         "payload": payload,
         "ttl_seconds": ttl,
     }))
+
+    logger.info("Device command dispatched device_id=%s command_type=%s", device_id, cmd_type)
 
     return jsonify({
         "command_id": command_id,

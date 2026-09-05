@@ -1,3 +1,4 @@
+import logging
 import uuid
 from datetime import datetime, timedelta
 
@@ -9,6 +10,7 @@ from app.utils.errors import error_response
 from app.utils.mtls import require_device_cert
 
 bp = Blueprint("device_api", __name__)
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -49,6 +51,7 @@ def bootstrap():
     device.mac = mac
     device.last_seen = datetime.utcnow()
     db.session.commit()
+    logger.info("Device bootstrapped device_id=%s is_new=%s", device.id, is_new)
 
     config = {
         "device_id": device.id,
@@ -93,6 +96,7 @@ def audio_session():
     db.session.add(conv)
     device.last_seen = datetime.utcnow()
     db.session.commit()
+    logger.info("Audio session created device_id=%s conv_id=%s", device.id, conv_id)
 
     expires_at = (datetime.utcnow() + timedelta(minutes=5)).strftime("%Y-%m-%dT%H:%M:%SZ")
     return jsonify({
@@ -127,6 +131,7 @@ def heartbeat():
     device.last_seen = datetime.utcnow()
     device.online = True
     db.session.commit()
+    logger.debug("Device heartbeat received device_id=%s", device.id)
 
     return jsonify({
         "ack": True,
@@ -161,4 +166,10 @@ def upload_logs():
 
     # Ingest entries into your logging pipeline here (e.g. Cloud Logging, Datadog)
     log_batch_id = f"log_{uuid.uuid4().hex[:8]}"
+    logger.info(
+        "Device logs accepted device_id=%s reason=%s entries=%s",
+        device.id,
+        reason,
+        len(entries),
+    )
     return jsonify({"accepted": len(entries), "log_batch_id": log_batch_id}), 202

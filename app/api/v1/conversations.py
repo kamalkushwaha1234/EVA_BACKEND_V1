@@ -1,3 +1,5 @@
+import logging
+
 from flask import Blueprint, jsonify, request
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -7,6 +9,7 @@ from app.utils.auth import require_scope
 from app.utils.errors import error_response
 
 bp = Blueprint("conversations", __name__)
+logger = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -37,6 +40,7 @@ def get_messages(conv_id):
     rows = query.limit(limit + 1).all()
     has_more = len(rows) > limit
     items = rows[:limit]
+    logger.info("Conversation messages read conv_id=%s count=%s", conv_id, len(items))
     return jsonify({
         "items": [m.to_dict() for m in items],
         "next_cursor": str(items[-1].id) if has_more else None,

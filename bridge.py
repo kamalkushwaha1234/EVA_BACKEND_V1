@@ -82,7 +82,7 @@ def _public_ip() -> str:
                     logger.info("[Net] Detected public IP (IMDSv2): %s", ip)
                     return ip
         except Exception:
-            pass
+            logger.debug("AWS IMDSv2 public IP lookup failed", exc_info=True)
         # Fallback to IMDSv1 (single retry)
         try:
             resp = requests.get(
@@ -94,7 +94,7 @@ def _public_ip() -> str:
                 logger.info("[Net] Detected public IP (IMDSv1): %s", ip)
                 return ip
         except Exception:
-            pass
+            logger.debug("AWS IMDSv1 public IP lookup failed", exc_info=True)
     ip = _local_ip()
     logger.info("[Net] Falling back to local IP: %s", ip)
     return ip
@@ -112,7 +112,7 @@ def _http_login() -> str:
     )
     res.raise_for_status()
     token = res.json()["access_token"]
-    logger.info("[Auth] Logged in as %s", API_EMAIL)
+    logger.info("[Auth] Standalone bridge login succeeded")
     return token
 
 
@@ -145,7 +145,7 @@ def _pipeline_http(wav_path: str) -> str | None:
 
     transcript = stt_res.json().get("text", "").strip()
     conv_id = stt_res.json().get("conv_id")
-    logger.info("[STT] %r", transcript)
+    logger.info("[STT] Transcript received characters=%s", len(transcript))
     if not transcript:
         return None
 
@@ -160,7 +160,7 @@ def _pipeline_http(wav_path: str) -> str | None:
         return None
 
     answer = ask_res.json().get("answer", "")
-    logger.info("[ASK] %r", answer)
+    logger.info("[ASK] Answer received characters=%s", len(answer))
 
     tts_res = requests.post(
         f"{API_BASE}/v1/ai/tts",
@@ -182,7 +182,7 @@ def _pipeline_direct(wav_bytes: bytes, flask_app) -> str | None:
 
     with flask_app.app_context():
         transcript = run_stt(wav_bytes, lang="hi")
-        logger.info("[STT] %r", transcript)
+        logger.info("[STT] Transcript received characters=%s", len(transcript))
         if not transcript:
             return None
 
@@ -190,7 +190,7 @@ def _pipeline_direct(wav_bytes: bytes, flask_app) -> str | None:
             transcript,
             system_prompt="You are a helpful AI tutor. Always respond in Hindi language only, using simple words suitable for children.",
         )
-        logger.info("[ASK] %r", answer)
+        logger.info("[ASK] Answer received characters=%s", len(answer))
 
         base_url = f"http://{MY_IP}:5000"
         audio_url, _ = run_tts(answer, lang="hi", base_url=base_url)
@@ -223,7 +223,7 @@ def _save_and_upload_wav(wav_bytes: bytes, key: str, flask_app=None):
             if s3_url:
                 logger.info("[Bridge] Uploaded recording to S3: %s", s3_url)
         except Exception:
-            pass
+            logger.exception("[Bridge] S3 recording upload failed key=%s", key)
     if os.path.exists(local):
         os.remove(local)
 

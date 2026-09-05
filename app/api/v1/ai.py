@@ -43,6 +43,7 @@ MAX_HISTORY = 20
 # ─── CORE HELPERS (used by both HTTP endpoints and the bridge) ─────────────────
 
 def _get_azure_client() -> ChatCompletionsClient:
+    logger.debug("Creating Azure inference client")
     return ChatCompletionsClient(
         endpoint=current_app.config["AZURE_ENDPOINT"],
         credential=AzureKeyCredential(current_app.config["AZURE_TOKEN"]),
@@ -62,6 +63,7 @@ def _run_tts_sync(text: str, voice: str, path: str) -> None:
     )
     with open(path, "wb") as f:
         f.write(response["AudioStream"].read())
+    logger.info("TTS audio generated voice=%s bytes=%s", voice, os.path.getsize(path))
 
 
 def run_stt(wav_bytes: bytes, lang: str = "hi") -> str:
@@ -90,6 +92,7 @@ def run_stt(wav_bytes: bytes, lang: str = "hi") -> str:
     resp.raise_for_status()
     result = resp.json()
     transcript = result["results"]["channels"][0]["alternatives"][0]["transcript"]
+    logger.info("STT completed language=%s audio_bytes=%s", language, len(wav_bytes))
     return transcript.strip()
 
 
@@ -124,6 +127,7 @@ def run_ask(
         messages=messages,
     )
     answer = response.choices[0].message.content
+    logger.info("AI response generated conv_id=%s history_messages=%s", conv_id, len(history))
 
     if conv_id:
         db.session.add(Message(conv_id=conv_id, role="user", text=question))
@@ -167,6 +171,7 @@ def run_tts(
             last_reply.audio_url = audio_url
             db.session.commit()
 
+            logger.info("TTS completed filename=%s stored remotely=%s", filename, bool(s3_url))
     return audio_url, filename
 
 
@@ -211,8 +216,10 @@ def speech_to_text():
 
     try:
         text = run_stt(audio_file.read(), lang=lang)
+        logger.info("STT request completed user_id=%s conv_id=%s", user_id, conv_id)
         return jsonify({"language": lang, "text": text, "conv_id": conv_id})
     except Exception as e:
+        logger.exception("STT request failed user_id=%s conv_id=%s", user_id, conv_id)
         return error_response("STT_FAILED", str(e), 500)
 
 
