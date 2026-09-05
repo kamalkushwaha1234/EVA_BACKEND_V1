@@ -5,7 +5,7 @@ from app.extensions import db
 class Message(db.Model):
     __tablename__ = "messages"
 
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     conv_id = db.Column(db.String(36), db.ForeignKey("conversations.id"), nullable=False, index=True)
     role = db.Column(db.String(16), nullable=False)  # "user" or "assistant"
     text = db.Column(db.Text, nullable=False)
