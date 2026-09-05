@@ -1,5 +1,6 @@
 import os
 from datetime import timedelta
+from urllib.parse import quote_plus
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -8,12 +9,29 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 _ROOT = os.path.dirname(_HERE)
 
 
+def _database_uri() -> str:
+    """
+    Local dev: no DB_HOST set -> falls back to DATABASE_URL (sqlite by default).
+    Deployment: set DB_HOST (+ DB_NAME, DB_USER, DB_PASSWORD, DB_PORT) and a
+    PostgreSQL URI is built from them instead.
+    """
+    db_host = os.environ.get("DB_HOST")
+    if not db_host:
+        return os.environ.get("DATABASE_URL", "sqlite:///eva.db")
+
+    db_port = os.environ.get("DB_PORT", "5432")
+    db_name = os.environ.get("DB_NAME", "eva")
+    db_user = os.environ.get("DB_USER", "postgres")
+    db_password = quote_plus(os.environ.get("DB_PASSWORD", ""))
+    return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+
+
 class Config:
     LOG_LEVEL = os.environ.get("LOG_LEVEL", "INFO")
     LOG_FILE = os.environ.get("LOG_FILE", os.path.join(_ROOT, "logFile.log"))
 
     SECRET_KEY = os.environ.get("SECRET_KEY", "dev-secret-key")
-    SQLALCHEMY_DATABASE_URI = os.environ.get("DATABASE_URL", "sqlite:///eva.db")
+    SQLALCHEMY_DATABASE_URI = _database_uri()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     JWT_SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "dev-jwt-secret")
