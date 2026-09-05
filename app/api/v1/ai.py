@@ -133,8 +133,17 @@ def run_ask(
     return answer
 
 
-def run_tts(text: str, lang: str = "en", base_url: str = "") -> tuple[str, str]:
-    """Generate TTS MP3. Returns (audio_url, filename). Requires Flask app context."""
+def run_tts(
+    text: str,
+    lang: str = "en",
+    base_url: str = "",
+    conv_id: str | None = None,
+) -> tuple[str, str]:
+    """Generate TTS MP3. Returns (audio_url, filename). Requires Flask app context.
+
+    If conv_id is given, attaches the audio_url to the most recent assistant
+    message in that conversation (the text/answer is already recorded by run_ask).
+    """
     voice = VOICE_MAP.get(lang, VOICE_MAP["en"])
     audio_id = uuid.uuid4().hex
     filename = f"{audio_id}.mp3"
@@ -144,9 +153,21 @@ def run_tts(text: str, lang: str = "en", base_url: str = "") -> tuple[str, str]:
     s3_url = _upload_to_s3(filepath, filename)
     if s3_url:
         os.remove(filepath)
-        return s3_url, filename
+        audio_url = s3_url
+    else:
+        audio_url = f"{base_url}/v1/ai/audio/{filename}"
 
-    return f"{base_url}/v1/ai/audio/{filename}", filename
+    if conv_id:
+        last_reply = (
+            Message.query.filter_by(conv_id=conv_id, role="assistant")
+            .order_by(Message.ts.desc())
+            .first()
+        )
+        if last_reply:
+            last_reply.audio_url = audio_url
+            db.session.commit()
+
+    return audio_url, filename
 
 
 def _upload_to_s3(filepath: str, key: str) -> str | None:
@@ -170,12 +191,23 @@ def serve_audio(filename):
 @jwt_required()
 @limiter.limit("60 per minute")
 def speech_to_text():
+    user_id = get_jwt_identity()
     lang = request.form.get("lang", "hi")
     conv_id = request.form.get("conv_id")
 
     audio_file = request.files.get("file")
     if not audio_file:
         return error_response("VALIDATION_FAILED", "Audio file required.", 400)
+
+    if conv_id:
+        conv = db.session.get(Conversation, conv_id)
+        if not conv:
+            return error_response("CONVERSATION_NOT_FOUND", "No such conversation.", 404)
+        device = db.session.get(Device, conv.device_id)
+        if not device or device.owner_id != user_id:
+            return error_response(
+                "NOT_OWNER", "Not authorized to access this conversation.", 403
+            )
 
     try:
         text = run_stt(audio_file.read(), lang=lang)
@@ -221,17 +253,29 @@ def ask_llm():
 @jwt_required()
 @limiter.limit("60 per minute")
 def text_to_speech():
+    user_id = get_jwt_identity()
     data = request.get_json(silent=True) or {}
     text = (data.get("text") or "").strip()
     lang = data.get("lang", "en")
+    conv_id = data.get("conv_id")
 
     if not text:
         return error_response("VALIDATION_FAILED", "text is required.", 400)
 
+    if conv_id:
+        conv = db.session.get(Conversation, conv_id)
+        if not conv:
+            return error_response("CONVERSATION_NOT_FOUND", "No such conversation.", 404)
+        device = db.session.get(Device, conv.device_id)
+        if not device or device.owner_id != user_id:
+            return error_response(
+                "NOT_OWNER", "Not authorized to access this conversation.", 403
+            )
+
     try:
         base = request.host_url.rstrip("/")
-        audio_url, filename = run_tts(text, lang=lang, base_url=base)
-        return jsonify({"audio_url": audio_url, "filename": filename})
+        audio_url, filename = run_tts(text, lang=lang, base_url=base, conv_id=conv_id)
+        return jsonify({"audio_url": audio_url, "filename": filename, "conv_id": conv_id})
     except Exception as e:
         return error_response("TTS_FAILED", str(e), 500)
 
