@@ -13,6 +13,7 @@ from flask_jwt_extended import (
     jwt_required,
 )
 
+
 from app.extensions import db, limiter
 from app.models import User
 from app.utils.errors import error_response
