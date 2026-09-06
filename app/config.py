@@ -46,10 +46,9 @@ class Config:
 
     RATELIMIT_STORAGE_URL = os.environ.get("REDIS_URL", "memory://")
 
-    # Azure OpenAI (GPT-4.1)
-    AZURE_ENDPOINT = os.environ.get("AZURE_ENDPOINT", "https://models.github.ai/inference")
-    AZURE_MODEL = os.environ.get("AZURE_MODEL", "openai/gpt-4.1")
-    AZURE_TOKEN = os.environ.get("GITHUB_TOKEN", "")
+    # Google Gemini (via its OpenAI-compatible endpoint) — free tier
+    GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+    GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-3.5-flash")
 
     # Deepgram STT
     DEEPGRAM_API_KEY = os.environ.get("DEEPGRAM_API_KEY", "")

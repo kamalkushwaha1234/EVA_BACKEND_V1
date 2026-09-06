@@ -344,14 +344,20 @@ def start_bridge(flask_app=None):
     _bridge_started = True
 
     client = _make_mqtt_client()
-    client.connect(MQTT_BROKER, MQTT_PORT)
 
-    threading.Thread(target=client.loop_forever, daemon=True).start()
+    def _connect_and_serve():
+        try:
+            client.connect(MQTT_BROKER, MQTT_PORT)
+            client.loop_forever()
+        except Exception:
+            logger.exception("[Bridge] MQTT connection failed")
+
+    threading.Thread(target=_connect_and_serve, daemon=True).start()
     threading.Thread(
         target=_udp_loop, args=(client, flask_app), daemon=True
     ).start()
 
-    logger.info("[Bridge] MQTT + UDP threads started.")
+    logger.info("[Bridge] MQTT + UDP threads starting in background.")
 
 
 # ─── STANDALONE ENTRY POINT ───────────────────────────────────────────────────
