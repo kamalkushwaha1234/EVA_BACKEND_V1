@@ -3,9 +3,7 @@ import uuid
 
 import boto3
 import requests
-from azure.ai.inference import ChatCompletionsClient
-from azure.ai.inference.models import AssistantMessage, SystemMessage, UserMessage
-from azure.core.credentials import AzureKeyCredential
+from openai import OpenAI
 from flask import Blueprint, current_app, jsonify, request, send_from_directory
 from flask_jwt_extended import get_jwt_identity, jwt_required
 
@@ -39,14 +37,16 @@ DEFAULT_SYSTEM_PROMPT = (
 
 MAX_HISTORY = 20
 
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
+
 
 # ─── CORE HELPERS (used by both HTTP endpoints and the bridge) ─────────────────
 
-def _get_azure_client() -> ChatCompletionsClient:
-    logger.debug("Creating Azure inference client")
-    return ChatCompletionsClient(
-        endpoint=current_app.config["AZURE_ENDPOINT"],
-        credential=AzureKeyCredential(current_app.config["AZURE_TOKEN"]),
+def _get_llm_client() -> OpenAI:
+    logger.debug("Creating Gemini (OpenAI-compatible) client")
+    return OpenAI(
+        api_key=current_app.config["GEMINI_API_KEY"],
+        base_url=GEMINI_BASE_URL,
     )
 
 
@@ -102,7 +102,7 @@ def run_ask(
     temperature: float = 0.7,
     system_prompt: str = DEFAULT_SYSTEM_PROMPT,
 ) -> str:
-    """Call Azure LLM with conversation history. Requires Flask app context."""
+    """Call the Gemini LLM with conversation history. Requires Flask app context."""
     history: list[Message] = []
     if conv_id:
         history = (
@@ -112,16 +112,14 @@ def run_ask(
             .all()
         )
 
-    messages = [SystemMessage(system_prompt)]
+    messages = [{"role": "system", "content": system_prompt}]
     for msg in history:
-        if msg.role == "user":
-            messages.append(UserMessage(msg.text))
-        elif msg.role == "assistant":
-            messages.append(AssistantMessage(msg.text))
-    messages.append(UserMessage(question))
+        if msg.role in ("user", "assistant"):
+            messages.append({"role": msg.role, "content": msg.text})
+    messages.append({"role": "user", "content": question})
 
-    response = _get_azure_client().complete(
-        model=current_app.config["AZURE_MODEL"],
+    response = _get_llm_client().chat.completions.create(
+        model=current_app.config["GEMINI_MODEL"],
         temperature=temperature,
         top_p=1.0,
         messages=messages,
