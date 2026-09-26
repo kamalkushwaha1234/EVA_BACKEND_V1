@@ -17,7 +17,12 @@ def _database_uri() -> str:
     """
     db_host = os.environ.get("DB_HOST")
     if not db_host:
-        return os.environ.get("DATABASE_URL", "sqlite:///eva.db")
+        url = os.environ.get("DATABASE_URL", "sqlite:///eva.db")
+        # Only psycopg2 is installed; pin any Postgres URL to that driver.
+        for prefix in ("postgresql+psycopg://", "postgresql://", "postgres://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg2://" + url[len(prefix):]
+        return url
 
     db_port = os.environ.get("DB_PORT", "5432")
     db_name = os.environ.get("DB_NAME", "eva")
