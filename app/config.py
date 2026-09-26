@@ -46,7 +46,7 @@ class Config:
     JWT_HEADER_NAME = "Authorization"
     JWT_HEADER_TYPE = "Bearer"
 
-    MQTT_BROKER_HOST = os.environ.get("MQTT_BROKER_HOST", "mqtt.eva.ai")
+    MQTT_BROKER_HOST = os.environ.get("MQTT_BROKER_HOST", "ffd11f88.ala.us-east-1.emqxsl.com")
     MQTT_BROKER_PORT = int(os.environ.get("MQTT_BROKER_PORT", 8883))
 
     RATELIMIT_STORAGE_URL = os.environ.get("REDIS_URL", "memory://")

@@ -25,7 +25,7 @@ load_dotenv()
 logger = logging.getLogger(__name__)
 
 # ─── CONFIGURATION ────────────────────────────────────────────────────────────
-MQTT_BROKER = os.environ.get("MQTT_BROKER_HOST", "mff41cf7.ala.asia-southeast1.emqxsl.com")
+MQTT_BROKER = os.environ.get("MQTT_BROKER_HOST", "ffd11f88.ala.us-east-1.emqxsl.com")
 MQTT_PORT = int(os.environ.get("MQTT_BROKER_PORT", 8883))
 MQTT_USER = os.environ.get("MQTT_USER", "toy")
 MQTT_PASS = os.environ.get("MQTT_PASS", "")
