@@ -350,7 +350,9 @@ def start_bridge(flask_app=None):
             client.connect(MQTT_BROKER, MQTT_PORT)
             client.loop_forever()
         except Exception:
-            logger.exception("[Bridge] MQTT connection failed")
+            logger.exception(
+                "[Bridge] MQTT connection failed (%s:%s)", MQTT_BROKER, MQTT_PORT
+            )
 
     threading.Thread(target=_connect_and_serve, daemon=True).start()
     threading.Thread(
