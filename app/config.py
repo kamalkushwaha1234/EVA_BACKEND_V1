@@ -61,6 +61,4 @@ class Config:
     # S3 (TTS file storage)
     S3_BUCKET = os.environ.get("S3_BUCKET", "")
     S3_REGION = os.environ.get("S3_REGION", "ap-south-1")
-    S3_ACCESS_KEY = os.environ.get("S3_ACCESS_KEY", "")
-    S3_SECRET_KEY = os.environ.get("S3_SECRET_KEY", "")
     S3_PUBLIC_URL = os.environ.get("S3_PUBLIC_URL", "")  # CloudFront / custom domain

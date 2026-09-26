@@ -1,7 +1,8 @@
 import logging
 
 import boto3
-from botocore.exceptions import ClientError
+from boto3.exceptions import S3UploadFailedError
+from botocore.exceptions import BotoCoreError, ClientError
 
 logger = logging.getLogger(__name__)
 
@@ -9,12 +10,8 @@ logger = logging.getLogger(__name__)
 def _client():
     from flask import current_app
 
-    cfg = current_app.config
-    kwargs = {"region_name": cfg["S3_REGION"]}
-    if cfg["S3_ACCESS_KEY"] and cfg["S3_SECRET_KEY"]:
-        kwargs["aws_access_key_id"] = cfg["S3_ACCESS_KEY"]
-        kwargs["aws_secret_access_key"] = cfg["S3_SECRET_KEY"]
-    return boto3.client("s3", **kwargs)
+    # Credentials come from the EC2 instance role (aws-elasticbeanstalk-ec2-role).
+    return boto3.client("s3", region_name=current_app.config["S3_REGION"])
 
 
 def upload(file_path: str, key: str) -> str | None:
@@ -36,7 +33,7 @@ def upload(file_path: str, key: str) -> str | None:
         if public_url:
             return f"{public_url}/{key}"
         return f"https://{bucket}.s3.{current_app.config['S3_REGION']}.amazonaws.com/{key}"
-    except ClientError:
+    except (ClientError, BotoCoreError, S3UploadFailedError):
         logger.exception("[S3] Upload failed: %s", key)
         return None
 
@@ -60,6 +57,6 @@ def upload_bytes(data: bytes, key: str, content_type: str = "audio/mpeg") -> str
         if public_url:
             return f"{public_url}/{key}"
         return f"https://{bucket}.s3.{current_app.config['S3_REGION']}.amazonaws.com/{key}"
-    except ClientError:
+    except (ClientError, BotoCoreError, S3UploadFailedError):
         logger.exception("[S3] Upload failed: %s", key)
         return None
