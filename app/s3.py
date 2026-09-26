@@ -21,13 +21,16 @@ def upload(file_path: str, key: str) -> str | None:
     if not bucket:
         return None
 
+    content_type = "audio/wav" if key.endswith(".wav") else "audio/mpeg"
     try:
         _client().upload_file(
             Filename=file_path,
             Bucket=bucket,
             Key=key,
-            ContentType="audio/mpeg",
-            ContentDisposition='inline'
+            ExtraArgs={
+                "ContentType": content_type,
+                "ContentDisposition": "inline",
+            },
         )
         public_url = current_app.config["S3_PUBLIC_URL"]
         if public_url:
