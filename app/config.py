@@ -28,7 +28,7 @@ def _database_uri() -> str:
     db_name = os.environ.get("DB_NAME", "eva")
     db_user = os.environ.get("DB_USER", "postgres")
     db_password = quote_plus(os.environ.get("DB_PASSWORD", ""))
-    return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
+    return f"postgresql+psycopg2://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
 
 
 class Config:
